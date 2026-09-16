@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Semanal — Peso e Medidas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #EEF3F0;
+    --ink: #1F2A24;
+    --muted: #5B6B63;
+    --teal: #1F3A3D;
+    --teal-light: #2E5254;
+    --amber: #E3A857;
+    --amber-dark: #C98A34;
+    --card: #FFFFFF;
+    --line: #D8E0DB;
+    --good: #4F7942;
+    --warn: #C98A34;
+    --bad: #C1443C;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    background:var(--teal); color:#fff; padding:22px 20px 26px;
+    border-bottom:4px solid var(--amber);
+  }
+  header h1{
+    font-family:var(--serif); font-weight:700; font-size:1.5rem; margin:0 0 2px;
+    letter-spacing:0.2px;
+  }
+  header p{margin:0; color:#BFD2CE; font-size:0.85rem;}
+
+  .wrap{max-width:900px; margin:0 auto; padding:18px 16px 60px;}
+
+  .hero{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px; margin:-30px 0 20px;
+  }
+  .stat{
+    background:var(--card); border:1px solid var(--line); border-radius:6px;
+    padding:14px 16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);
+  }
+  .stat .label{font-size:0.72rem; color:var(--muted); text-transform:none;}
+  .stat .value{font-family:var(--serif); font-size:1.7rem; font-weight:700; margin-top:2px;}
+  .stat .delta{font-family:var(--mono); font-size:0.8rem; margin-top:4px;}
+  .delta.up{color:var(--good);}
+  .delta.down{color:var(--bad);}
+  .delta.flat{color:var(--muted);}
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:6px;
+    padding:18px; margin-bottom:18px;
+  }
+  .card h2{
+    font-family:var(--serif); font-size:1.1rem; margin:0 0 14px; font-weight:700;
+  }
+
+  form{display:grid; grid-template-columns:repeat(2,1fr); gap:10px 14px;}
+  form .full{grid-column:1/-1;}
+  label{display:block; font-size:0.78rem; color:var(--muted); margin-bottom:3px;}
+  input{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:4px;
+    font-size:0.92rem; font-family:var(--mono); background:#FBFBFA;
+  }
+  input:focus{outline:2px solid var(--amber); outline-offset:1px; border-color:var(--amber);}
+
+  button{
+    font-family:var(--sans); font-weight:600; font-size:0.88rem; cursor:pointer;
+    border:none; border-radius:4px; padding:10px 18px;
+  }
+  .btn-primary{background:var(--teal); color:#fff;}
+  .btn-primary:hover{background:var(--teal-light);}
+  .btn-ghost{background:transparent; color:var(--bad); padding:4px 8px; font-size:0.78rem;}
+  .btn-ghost:hover{text-decoration:underline;}
+
+  .chart-toggle{display:flex; flex-wrap:wrap; gap:8px 14px; margin-bottom:12px;}
+  .chart-toggle label{display:flex; align-items:center; gap:5px; font-size:0.8rem; color:var(--ink); margin:0;}
+  .chart-toggle input{width:auto;}
+
+  canvas{max-height:280px;}
+
+  table{width:100%; border-collapse:collapse; font-size:0.82rem;}
+  th, td{padding:7px 8px; text-align:right; border-bottom:1px solid var(--line); font-family:var(--mono);}
+  th:first-child, td:first-child{text-align:left; font-family:var(--sans);}
+  th{color:var(--muted); font-weight:600; font-size:0.72rem;}
+  tbody tr:hover{background:#F5F8F6;}
+  .status-badge{
+    display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.7rem;
+    font-family:var(--sans); font-weight:600;
+  }
+  .status-good{background:#E4EEE1; color:var(--good);}
+  .status-warn{background:#FBEFDD; color:var(--warn);}
+  .status-bad{background:#FBE3E1; color:var(--bad);}
+  .status-none{background:#EEEEEE; color:var(--muted);}
+
+  .empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:0.88rem;}
+  .foot-note{font-size:0.75rem; color:var(--muted); margin-top:10px; line-height:1.4;}
+  .save-msg{font-size:0.78rem; color:var(--good); margin-top:8px; min-height:1em;}
+  .err-msg{font-size:0.78rem; color:var(--bad); margin-top:8px; min-height:1em;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Painel Semanal</h1>
+  <p>Peso e medidas corporais — DM1 + hipertrofia</p>
+</header>
+
+<div class="wrap">
+
+  <div class="hero" id="hero"></div>
+
+  <div class="card">
+    <h2>Registrar semana</h2>
+    <form id="form">
+      <div>
+        <label for="data">Data</label>
+        <input type="date" id="data" required>
+      </div>
+      <div>
+        <label for="peso">Peso (kg)</label>
+        <input type="number" step="0.1" id="peso" placeholder="85.0" required>
+      </div>
+      <div>
+        <label for="braco">Braço (cm)</label>
+        <input type="number" step="0.1" id="braco" placeholder="34.0">
+      </div>
+      <div>
+        <label for="peito">Peito (cm)</label>
+        <input type="number" step="0.1" id="peito" placeholder="100.0">
+      </div>
+      <div>
+        <label for="cintura">Cintura (cm)</label>
+        <input type="number" step="0.1" id="cintura" placeholder="84.0">
+      </div>
+      <div>
+        <label for="abdomen">Abdômen (cm)</label>
+        <input type="number" step="0.1" id="abdomen" placeholder="86.0">
+      </div>
+      <div>
+        <label for="coxa">Coxa (cm)</label>
+        <input type="number" step="0.1" id="coxa" placeholder="58.0">
+      </div>
+      <div>
+        <label for="panturrilha">Panturrilha (cm)</label>
+        <input type="number" step="0.1" id="panturrilha" placeholder="37.0">
+      </div>
+      <div class="full">
+        <button type="submit" class="btn-primary">Salvar semana</button>
+      </div>
+    </form>
+    <div class="save-msg" id="saveMsg"></div>
+    <div class="err-msg" id="errMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Evolução do peso</h2>
+    <canvas id="chartPeso"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Evolução das medidas</h2>
+    <div class="chart-toggle" id="toggles"></div>
+    <canvas id="chartMedidas"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Histórico</h2>
+    <div id="tableWrap"></div>
+    <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="button" class="btn-primary" id="btnExport" style="background:var(--teal-light);">Exportar dados (backup)</button>
+      <button type="button" class="btn-primary" id="btnImportTrigger" style="background:var(--amber-dark);">Importar dados</button>
+      <input type="file" id="fileImport" accept="application/json" style="display:none;">
+    </div>
+    <p class="foot-note">
+      Meta de peso: 0,25 a 0,5 kg por semana. Ganho mais rápido que isso tende a ser água/gordura, não músculo.
+      Braço, peito, coxa e panturrilha devem crescer aos poucos; cintura e abdômen devem ficar estáveis.
+    </p>
+    <p class="foot-note">
+      Os dados ficam salvos só neste navegador/aparelho. Use "Exportar" pra baixar um backup e "Importar" pra carregar esse backup em outro navegador ou aparelho.
+    </p>
+  </div>
+
+</div>
+
+<script>
+const MEDIDAS = [
+  {key:'braco', label:'Braço', color:'#2E5254'},
+  {key:'peito', label:'Peito', color:'#C98A34'},
+  {key:'cintura', label:'Cintura', color:'#8B6F9E'},
+  {key:'abdomen', label:'Abdômen', color:'#C1443C'},
+  {key:'coxa', label:'Coxa', color:'#4F7942'},
+  {key:'panturrilha', label:'Panturrilha', color:'#3B7A9E'},
+];
+const STORAGE_KEY = 'painel_semanal:entries';
+
+let entries = [];
+let chartPeso, chartMedidas;
+let visibleMedidas = new Set(MEDIDAS.map(m => m.key));
+
+async function loadEntries(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    entries = raw ? JSON.parse(raw) : [];
+  }catch(e){
+    entries = [];
+  }
+  entries.sort((a,b) => a.data.localeCompare(b.data));
+}
+
+async function saveEntries(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    return true;
+  }catch(e){
+    document.getElementById('errMsg').textContent = 'Não consegui salvar (verifique se o navegador permite armazenamento local para arquivos abertos localmente).';
+    return false;
+  }
+}
+
+function fmtDate(iso){
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function delta(curr, prev){
+  if(prev === undefined || prev === null || curr === undefined || curr === null) return null;
+  return curr - prev;
+}
+
+function statusForPesoDelta(d){
+  if(d === null) return {cls:'status-none', text:'—'};
+  if(d < 0) return {cls:'status-bad', text:'Perdendo peso'};
+  if(d < 0.25) return {cls:'status-warn', text:'Abaixo da meta'};
+  if(d <= 0.5) return {cls:'status-good', text:'Dentro da meta'};
+  return {cls:'status-warn', text:'Acima da meta'};
+}
+
+function renderHero(){
+  const hero = document.getElementById('hero');
+  hero.innerHTML = '';
+  if(entries.length === 0){
+    hero.innerHTML = '<div class="stat"><div class="label">Peso atual</div><div class="value">—</div></div>';
+    return;
+  }
+  const last = entries[entries.length - 1];
+  const prev = entries.length > 1 ? entries[entries.length - 2] : null;
+
+  const pesoDelta = prev ? delta(last.peso, prev.peso) : null;
+  hero.appendChild(statCard('Peso atual', last.peso.toFixed(1) + ' kg', pesoDelta, 'kg'));
+
+  MEDIDAS.forEach(m => {
+    if(last[m.key] === undefined || last[m.key] === null || last[m.key] === '') return;
+    const d = prev ? delta(last[m.key], prev[m.key]) : null;
+    hero.appendChild(statCard(m.label, Number(last[m.key]).toFixed(1) + ' cm', d, 'cm'));
+  });
+}
+
+function statCard(label, value, d, unit){
+  const div = document.createElement('div');
+  div.className = 'stat';
+  let deltaHtml = '';
+  if(d !== null && d !== undefined){
+    const cls = d > 0.001 ? 'up' : (d < -0.001 ? 'down' : 'flat');
+    const sign = d > 0 ? '+' : '';
+    deltaHtml = `<div class="delta ${cls}">${sign}${d.toFixed(1)} ${unit} vs. sem. anterior</div>`;
+  }
+  div.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>${deltaHtml}`;
+  return div;
+}
+
+function renderCharts(){
+  const labels = entries.map(e => fmtDate(e.data));
+
+  const ctxPeso = document.getElementById('chartPeso');
+  if(chartPeso) chartPeso.destroy();
+  chartPeso = new Chart(ctxPeso, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Peso (kg)',
+        data: entries.map(e => e.peso),
+        borderColor: '#1F3A3D',
+        backgroundColor: '#1F3A3D',
+        tension: 0.25,
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { title: { display: true, text: 'kg' } } }
+    }
+  });
+
+  const ctxMed = document.getElementById('chartMedidas');
+  if(chartMedidas) chartMedidas.destroy();
+  const datasets = MEDIDAS.filter(m => visibleMedidas.has(m.key)).map(m => ({
+    label: m.label,
+    data: entries.map(e => (e[m.key] === undefined || e[m.key] === '' ? null : Number(e[m.key]))),
+    borderColor: m.color,
+    backgroundColor: m.color,
+    tension: 0.25,
+    pointRadius: 3,
+    spanGaps: true,
+  }));
+  chartMedidas = new Chart(ctxMed, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: { y: { title: { display: true, text: 'cm' } } }
+    }
+  });
+}
+
+function renderToggles(){
+  const wrap = document.getElementById('toggles');
+  wrap.innerHTML = '';
+  MEDIDAS.forEach(m => {
+    const id = 'toggle_' + m.key;
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" id="${id}" ${visibleMedidas.has(m.key) ? 'checked' : ''}> ${m.label}`;
+    wrap.appendChild(label);
+    label.querySelector('input').addEventListener('change', (ev) => {
+      if(ev.target.checked) visibleMedidas.add(m.key);
+      else visibleMedidas.delete(m.key);
+      renderCharts();
+    });
+  });
+}
+
+function renderTable(){
+  const wrap = document.getElementById('tableWrap');
+  if(entries.length === 0){
+    wrap.innerHTML = '<div class="empty">Nenhum registro ainda. Adicione a primeira semana acima.</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Data</th><th>Peso</th>';
+  MEDIDAS.forEach(m => html += `<th>${m.label}</th>`);
+  html += '<th>Status</th><th></th></tr></thead><tbody>';
+
+  const sorted = [...entries].sort((a,b) => b.data.localeCompare(a.data));
+  sorted.forEach((e) => {
+    const idx = entries.indexOf(e);
+    const prevIdx = idx - 1;
+    const prev = prevIdx >= 0 ? entries[prevIdx] : null;
+    const d = prev ? delta(e.peso, prev.peso) : null;
+    const st = statusForPesoDelta(d);
+    html += `<tr><td>${fmtDate(e.data)}</td><td>${e.peso.toFixed(1)}</td>`;
+    MEDIDAS.forEach(m => {
+      const v = e[m.key];
+      html += `<td>${v === undefined || v === '' || v === null ? '—' : Number(v).toFixed(1)}</td>`;
+    });
+    html += `<td><span class="status-badge ${st.cls}">${st.text}</span></td>`;
+    html += `<td><button class="btn-ghost" data-del="${e.data}">remover</button></td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const dateKey = btn.getAttribute('data-del');
+      entries = entries.filter(e => e.data !== dateKey);
+      const ok = await saveEntries();
+      if(ok) renderAll();
+    });
+  });
+}
+
+function renderAll(){
+  renderHero();
+  renderCharts();
+  renderTable();
+}
+
+document.getElementById('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  document.getElementById('saveMsg').textContent = '';
+  document.getElementById('errMsg').textContent = '';
+
+  const entry = {
+    data: document.getElementById('data').value,
+    peso: parseFloat(document.getElementById('peso').value),
+  };
+  MEDIDAS.forEach(m => {
+    const v = document.getElementById(m.key).value;
+    entry[m.key] = v === '' ? null : parseFloat(v);
+  });
+
+  if(!entry.data || isNaN(entry.peso)){
+    document.getElementById('errMsg').textContent = 'Preencha ao menos a data e o peso.';
+    return;
+  }
+
+  entries = entries.filter(e => e.data !== entry.data);
+  entries.push(entry);
+  entries.sort((a,b) => a.data.localeCompare(b.data));
+
+  const ok = await saveEntries();
+  if(ok){
+    document.getElementById('saveMsg').textContent = 'Semana salva.';
+    ev.target.reset();
+    renderAll();
+  }
+});
+
+(async function init(){
+  await loadEntries();
+  renderToggles();
+  renderAll();
+  const dataInput = document.getElementById('data');
+  const today = new Date().toISOString().split('T')[0];
+  dataInput.value = today;
+})();
+
+document.getElementById('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `painel_semanal_backup_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnImportTrigger').addEventListener('click', () => {
+  document.getElementById('fileImport').click();
+});
+
+document.getElementById('fileImport').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  if(!file) return;
+  document.getElementById('errMsg').textContent = '';
+  document.getElementById('saveMsg').textContent = '';
+  try{
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    if(!Array.isArray(imported)) throw new Error('Formato inválido');
+
+    const byDate = {};
+    entries.forEach(e => byDate[e.data] = e);
+    imported.forEach(e => {
+      if(e && e.data && typeof e.peso === 'number') byDate[e.data] = e;
+    });
+    entries = Object.values(byDate).sort((a,b) => a.data.localeCompare(b.data));
+
+    const ok = await saveEntries();
+    if(ok){
+      document.getElementById('saveMsg').textContent = `Importado com sucesso (${imported.length} registro(s) mesclado(s)).`;
+      renderAll();
+    }
+  }catch(e){
+    document.getElementById('errMsg').textContent = 'Não consegui ler esse arquivo. Verifique se é um backup exportado por aqui.';
+  }
+  ev.target.value = '';
+});
+</script>
+
+</body>
+</html>
